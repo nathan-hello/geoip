@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/oschwald/geoip2-golang"
 	"github.com/ringsaturn/tzf"
@@ -17,6 +18,8 @@ type Response struct {
 	City     string `json:"city"`
 	Country  string `json:"country"`
 }
+
+var hits int = 0
 
 func main() {
 	// 1. Load GeoIP DB
@@ -33,6 +36,9 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		log.Printf("[%d] Request at %s", hits, time.Now().Format(time.DateTime))
+
 		// Get IP
 		ipStr := r.Header.Get("X-Real-IP")
 		if ipStr == "" {
