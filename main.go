@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/oschwald/geoip2-golang"
 	"github.com/ringsaturn/tzf"
@@ -37,7 +36,7 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		hits++
-		log.Printf("[%d] Request at %s", hits, time.Now().Format(time.DateTime))
+		log.Printf("Request %d of this session", hits)
 
 		// Get IP
 		ipStr := r.Header.Get("X-Real-IP")
