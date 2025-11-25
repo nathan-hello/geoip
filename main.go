@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/oschwald/geoip2-golang"
+	"github.com/ringsaturn/tzf"
 )
 
 type Response struct {
@@ -18,21 +19,28 @@ type Response struct {
 }
 
 func main() {
-	// Point to the DB-IP file we downloaded
+	// 1. Load GeoIP DB
 	db, err := geoip2.Open("./dbip-city-lite.mmdb")
 	if err != nil {
-		log.Fatal("Could not open database: ", err)
+		log.Fatal("DB Error: ", err)
 	}
 	defer db.Close()
 
+	// 2. Load Timezone Finder (Embeds compressed polygon data)
+	tzFinder, err := tzf.NewDefaultFinder()
+	if err != nil {
+		log.Fatal("TZF Error: ", err)
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Get IP from Header (if behind proxy) or RemoteAddr
-		ipStr := r.Header.Get("X-Forwarded-For")
+		// Get IP
+		ipStr := r.Header.Get("X-Real-IP")
+		if ipStr == "" {
+			ipStr = r.Header.Get("X-Forwarded-For")
+		}
 		if ipStr == "" {
 			ipStr, _, _ = net.SplitHostPort(r.RemoteAddr)
 		}
-		
-		// Handle comma-separated headers
 		if strings.Contains(ipStr, ",") {
 			ipStr = strings.TrimSpace(strings.Split(ipStr, ",")[0])
 		}
@@ -43,16 +51,23 @@ func main() {
 			return
 		}
 
-		// Lookup
+		// Lookup GeoIP
 		record, err := db.City(ip)
 		if err != nil {
 			http.Error(w, "Lookup failed", 500)
 			return
 		}
 
+		// Derive Timezone from Lat/Lon using TZF
+		// DB-IP Lite lacks the string, but has the coordinates.
+		tz := record.Location.TimeZone
+		if tz == "" && record.Location.Latitude != 0 {
+			tz = tzFinder.GetTimezoneName(record.Location.Longitude, record.Location.Latitude)
+		}
+
 		resp := Response{
 			IP:       ip.String(),
-			Timezone: record.Location.TimeZone,
+			Timezone: tz,
 			City:     record.City.Names["en"],
 			Country:  record.Country.Names["en"],
 		}
@@ -61,6 +76,6 @@ func main() {
 		json.NewEncoder(w).Encode(resp)
 	})
 
-	log.Println("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("Listening on :7515")
+	log.Fatal(http.ListenAndServe(":7515", nil))
 }
